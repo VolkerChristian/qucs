@@ -88,7 +88,6 @@ Makefile.in
 Makefile
 stamp-h1
 missing
-configure
 config.guess
 config.h
 config.sub
@@ -102,7 +101,6 @@ depcomp
 install-sh
 libtool
 autom4te.cache/
-aclocal.m4
 auxconf/
 libltdl/
 libtool.m4
@@ -176,13 +174,10 @@ CMakeLists.txt.user
 
 
 =======
-*.o
 *.cpp~
 *.h~
 qucsactivefilter
 *.pro.user
-Makefile
-moc_*.cpp
 *.sch
 *.sch~
 *.dat
@@ -206,3 +201,4 @@ CMakeScripts
 *.cxx_parameters
 shadow
 
+/compile
