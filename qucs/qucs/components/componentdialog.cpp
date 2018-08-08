@@ -16,7 +16,6 @@
  ***************************************************************************/
 
 #include "componentdialog.h"
-#include "main.h"
 #include "qucs.h"
 #include "schematic.h"
 #include "misc.h"
@@ -68,9 +67,9 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
   Property *pp = 0; // last property shown elsewhere outside the properties table, not to put in TableView
   // ...........................................................
   // if simulation component: .TR, .AC, .SW, (.SP ?)
-  if((Comp->Model[0] == '.') &&
-     (Comp->Model != ".DC") && (Comp->Model != ".HB") &&
-     (Comp->Model != ".Digi") && (Comp->Model != ".ETR")) {
+  if((Comp->obsolete_model_hack()[0] == '.') &&
+     (Comp->obsolete_model_hack() != ".DC") && (Comp->obsolete_model_hack() != ".HB") &&
+     (Comp->obsolete_model_hack() != ".Digi") && (Comp->obsolete_model_hack() != ".ETR")) {
     QTabWidget *t = new QTabWidget(this);
     all->addWidget(t);
 
@@ -79,7 +78,8 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
     QGridLayout *gp = new QGridLayout;
     Tab1->setLayout(gp);
 
-    gp->addWidget(new QLabel(Comp->Description, Tab1), 0,0,1,2);
+	 // BUG: memory leak
+    gp->addWidget(new QLabel(Comp->description(), Tab1), 0,0,1,2);
 
     int row=1;
     editParam = new QLineEdit(Tab1);
@@ -87,7 +87,7 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
     connect(editParam, SIGNAL(returnPressed()), SLOT(slotParamEntered()));
     checkParam = new QCheckBox(tr("display in schematic"), Tab1);
 
-    if(Comp->Model == ".SW") {   // parameter sweep
+    if(Comp->obsolete_model_hack() == ".SW") {   // parameter sweep
       textSim = new QLabel(tr("Simulation:"), Tab1);
       gp->addWidget(textSim, row,0);
       comboSim = new QComboBox(Tab1);
@@ -101,10 +101,10 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
       editParam->setReadOnly(true);
       checkParam->setDisabled(true);
 
-      if(Comp->Model == ".TR")    // transient simulation ?
+      if(Comp->obsolete_model_hack() == ".TR")    // transient simulation ?
         editParam->setText("time");
       else {
-        if(Comp->Model == ".AC")    // AC simulation ?
+        if(Comp->obsolete_model_hack() == ".AC")    // AC simulation ?
           editParam->setText("acfrequency");
         else
           editParam->setText("frequency");
@@ -175,13 +175,13 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
     gp->addWidget(checkNumber, row++,2);
 
 
-    if(Comp->Model == ".SW") {   // parameter sweep
+    if(Comp->obsolete_model_hack() == ".SW") {   // parameter sweep
       Component *pc;
       for(pc=Doc->Components->first(); pc!=0; pc=Doc->Components->next()) {
 	// insert all schematic available simulations in the Simulation combo box
         if(pc != Comp)
-          if(pc->Model[0] == '.')
-            comboSim->insertItem(comboSim->count(), pc->Name);
+          if(pc->obsolete_model_hack()[0] == '.')
+            comboSim->insertItem(comboSim->count(), pc->name());
       }
       qDebug() << "[]" << Comp->Props.first()->Value;
       // set selected simulations in combo box to the currently used one
@@ -264,7 +264,8 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
 
 
   // ...........................................................
-  gp1->addWidget(new QLabel(Comp->Description), 0,0,1,2);
+  // BUG: memory leak
+  gp1->addWidget(new QLabel(Comp->description()), 0,0,1,2);
 
   QHBoxLayout *h5 = new QHBoxLayout;
   h5->setSpacing(5);
@@ -307,8 +308,13 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
   prop->horizontalHeader()->setStretchLastSection(true);
   // set automatic resize so all content will be visible, 
   //  horizontal scrollbar will appear if table becomes too large
+#if QT_VERSION < 0x050000
   prop->horizontalHeader()->setResizeMode(QHeaderView::ResizeToContents);
   prop->horizontalHeader()->setClickable(false); // no action when clicking on the header 
+#else
+  prop->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+  prop->horizontalHeader()->setSectionsClickable(false); // no action when clicking on the header 
+#endif
 
   connect(prop->horizontalHeader(),SIGNAL(sectionDoubleClicked(int)),
               this, SLOT(slotHHeaderClicked(int)));
@@ -415,7 +421,7 @@ ComponentDialog::ComponentDialog(Component *c, Schematic *d)
   connect(cancel, SIGNAL(clicked()), SLOT(slotButtCancel()));
 
   // ------------------------------------------------------------
-  CompNameEdit->setText(Comp->Name);
+  CompNameEdit->setText(Comp->name());
   showName->setChecked(Comp->showName);
   changed = false;
 
@@ -505,10 +511,10 @@ void ComponentDialog::updateCompPropsList()
     int last_prop=0; // last property not to put in ListView
         // ...........................................................
         // if simulation component: .TR, .AC, .SW, (.SP ?)
-    if((Comp->Model[0] == '.') &&
-       (Comp->Model != ".DC") && (Comp->Model != ".HB") &&
-       (Comp->Model != ".Digi") && (Comp->Model != ".ETR")) {
-        if(Comp->Model == ".SW") {   // parameter sweep
+    if((Comp->obsolete_model_hack()[0] == '.') &&
+       (Comp->obsolete_model_hack() != ".DC") && (Comp->obsolete_model_hack() != ".HB") &&
+       (Comp->obsolete_model_hack() != ".Digi") && (Comp->obsolete_model_hack() != ".ETR")) {
+        if(Comp->obsolete_model_hack() == ".SW") {   // parameter sweep
            last_prop = 2;
         } else {
             last_prop = 0;
@@ -602,15 +608,7 @@ void ComponentDialog::slotSelectProperty(QTableWidgetItem *item)
     ButtAdd->setEnabled(true);
     ButtRem->setEnabled(true);
 
-    // enable Up/Down buttons only for the Equation component
-    if (Comp->Model == "Eqn") {
-      ButtUp->setEnabled(true);
-      ButtDown->setEnabled(true);
-    }
-    else {
-      ButtUp->setEnabled(false);
-      ButtDown->setEnabled(false);
-    }
+    Comp->dialgButtStuff(*this);
     Name->setText("");
     NameEdit->setText(name);
     edit->setText(value);
@@ -830,15 +828,15 @@ void ComponentDialog::slotApplyInput()
 
   QString tmp;
   Component *pc;
-  if(CompNameEdit->text().isEmpty())  CompNameEdit->setText(Comp->Name);
+  if(CompNameEdit->text().isEmpty())  CompNameEdit->setText(Comp->name());
   else
-  if(CompNameEdit->text() != Comp->Name) {
+  if(CompNameEdit->text() != Comp->name()) {
     for(pc = Doc->Components->first(); pc!=0; pc = Doc->Components->next())
-      if(pc->Name == CompNameEdit->text())
+      if(pc->name() == CompNameEdit->text())
         break;  // found component with the same name ?
-    if(pc)  CompNameEdit->setText(Comp->Name);
+    if(pc)  CompNameEdit->setText(Comp->name());
     else {
-      Comp->Name = CompNameEdit->text();
+      Comp->obsolete_name_override_hack(CompNameEdit->text());
       changed = true;
     }
   }
@@ -1123,7 +1121,7 @@ void ComponentDialog::slotBrowseFile()
     edit->setText(s);
   }
   /* FIX
-  prop->currentItem()->setText(1, s); */
+  prop->currentIndex()->setText(1, s); */
 }
 
 // -------------------------------------------------------------------------
@@ -1482,4 +1480,16 @@ void ComponentDialog::slotHHeaderClicked(int headerIdx)
     cell->setText(s);
   }
   setAllVisible = not setAllVisible; // toggle visibility for the next double-click
+}
+
+void ComponentDialog::disableButtons()
+{
+  ButtUp->setEnabled(false);
+  ButtDown->setEnabled(false);
+}
+
+void ComponentDialog::enableButtons()
+{
+  ButtUp->setEnabled(true);
+  ButtDown->setEnabled(true);
 }

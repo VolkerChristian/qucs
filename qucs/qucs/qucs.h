@@ -22,15 +22,25 @@
 #include <QString>
 #include <QHash>
 #include <QStack>
+#include <QDir>
+
+/**
+ * @file qucs.h
+ * @brief definition of the main Qucs application class and other helper classes
+ */
 
 class QucsDoc;
 class Schematic;
+class TextDoc;
 class SimMessage;
 class MouseActions;
 class SearchDialog;
 class OctaveWindow;
 class MessageDock;
 class ProjectView;
+class ContextMenuTabWidget;
+class VersionTriplet;
+class QucsApp;
 
 class QLabel;
 class QAction;
@@ -53,16 +63,86 @@ class QFileSystemModel;
 class QModelIndex;
 class QPushButton;
 
+#ifdef __MINGW32__
+#define executableSuffix ".exe"
+#else
+#define executableSuffix ""
+#endif
+
+/* pi */
+static const double pi = 3.141592653589793238462643383279502884197169399375105820974944;
+
+struct tQucsSettings {
+  int x, y, dx, dy;    // position and size of main window
+  QFont font;
+  float largeFontSize;
+  QColor BGColor;      // background color of view area
+  QString Language;
+
+  // syntax highlighting
+  QColor Comment, String, Integer, Real, Character, Type,
+    Attribute, Directive, Task;
+
+  unsigned int maxUndo;    // size of undo stack
+  QString Editor;
+  QString Qucsator;
+  QString Qucsconv;
+  QString BinDir;
+  QString LangDir;
+  QString LibDir;
+  QString OctaveDir;  // m-files location
+  QString ExamplesDir;
+  QString DocDir;
+
+  unsigned int NodeWiring;
+  QDir QucsWorkDir;
+  QDir QucsHomeDir;
+  QDir AdmsXmlBinDir;  // dir of admsXml executable
+  QDir AscoBinDir;     // dir of asco executable
+  // QDir OctaveBinDir;   // dir of octave executable
+  QString OctaveExecutable; // OctaveExecutable location
+  QString QucsOctave; // OUCS_OCTAVE variable
+
+  // registered filename extensions with program to open the file
+  QStringList FileTypes;
+
+  // List of extensions used for spice files
+  QStringList spiceExtensions;
+
+  unsigned int numRecentDocs;
+  QStringList RecentDocs;
+
+  bool IgnoreFutureVersion;
+  bool GraphAntiAliasing;
+  bool TextAntiAliasing;
+  bool ShowDescriptionProjectTree;
+};
+
+// extern because nearly everywhere used
+extern tQucsSettings QucsSettings;  // extern because nearly everywhere used
+extern QString lastDir;    // to remember last directory for several dialogs
+extern QStringList qucsPathList;
+extern VersionTriplet QucsVersion;
+extern QucsApp *QucsMain;  // the Qucs application itself
+
+// TODO move these inside the QucsApp class?
+bool loadSettings();
+bool saveApplSettings();
+
+// function pointers used with mouse actions handling
+/// function pointers used to handle mouse actions
 typedef bool (Schematic::*pToggleFunc) ();
 typedef void (MouseActions::*pMouseFunc) (Schematic*, QMouseEvent*);
-typedef void (MouseActions::*pMouseFunc2) (Schematic*, QMouseEvent*, float, float);
 
 class QucsApp : public QMainWindow {
   Q_OBJECT
 public:
   QucsApp();
  ~QucsApp();
-  bool closeAllFiles();
+  bool closeTabsRange(int startTab, int stopTab, int exceptTab = -1);
+  bool closeAllFiles(int exceptTab = -1);
+  bool closeAllLeft(int);
+  bool closeAllRight(int);
   bool gotoPage(const QString&);   // to load a document
   QucsDoc *getDoc(int No=-1);
   QucsDoc* findDoc (QString, int * Pos = 0);
@@ -78,7 +158,7 @@ public:
 
   // current mouse methods
   void (MouseActions::*MouseMoveAction) (Schematic*, QMouseEvent*);
-  void (MouseActions::*MousePressAction) (Schematic*, QMouseEvent*, float, float);
+  void (MouseActions::*MousePressAction) (Schematic*, QMouseEvent*);
   void (MouseActions::*MouseDoubleClickAction) (Schematic*, QMouseEvent*);
   void (MouseActions::*MouseReleaseAction) (Schematic*, QMouseEvent*);
 
@@ -86,13 +166,18 @@ protected:
   void closeEvent(QCloseEvent*);
 
 public slots:
-  void slotFileNew();     // generate a new schematic in the view TabBar
-  void slotTextNew();     // generate a new text editor in the view TabBar
+  void slotFileNew(bool enableOpenDpl=true); // generate a new schematic in the view TabBar
+  void slotFileNewNoDD(); // as above, but with "open Data Display" unchecked
+  void slotTextNew();     // edit text in the built editor or user defined editor
   void slotFileOpen();    // open a document
   void slotFileSave();    // save a document
   void slotFileSaveAs();  // save a document under a different filename
   void slotFileSaveAll(); // save all open documents
-  void slotFileClose();   // close the actual file
+  void slotFileClose();   // close the current file
+  void slotFileCloseOthers();   // close all documents except the current one
+  void slotFileCloseAllLeft();  // close all documents to the left of the current one
+  void slotFileCloseAllRight(); // close all documents to the right of the current one
+  void slotFileCloseAll();      //  close all documents
   void slotFileExamples();   // show the examples in a file browser
   void slotHelpTutorial();   // Open a pdf tutorial
   void slotHelpReport();   // Open a pdf report
@@ -110,7 +195,7 @@ public slots:
   void slotPopHierarchy();
 
   void slotShowAll();
-  void slotShowOne();
+  void slotZoomReset();
   void slotZoomOut(); // Zoom out by 2
 
   void slotToPage();
@@ -146,7 +231,7 @@ private slots:
   void slotButtonProjNew();
   void slotButtonProjOpen();
   void slotButtonProjDel();
-  void slotChangeView(QWidget*);
+  void slotChangeView(int index);
   void slotSimulate();
   void slotAfterSimulation(int, SimMessage*);
   void slotDCbias();
@@ -158,7 +243,7 @@ signals:
 
 public:
   MouseActions *view;
-  QTabWidget *DocumentTab;
+  ContextMenuTabWidget *DocumentTab;
   QListWidget *CompComps;
   QTreeWidget *libTreeWidget;
 
@@ -168,8 +253,9 @@ public:
   // corresponding actions
   QAction *ActionCMenuOpen, *ActionCMenuCopy, *ActionCMenuRename, *ActionCMenuDelete, *ActionCMenuInsert;
 
-  QAction *fileNew, *textNew, *fileNewDpl, *fileOpen, *fileSave, *fileSaveAs,
-          *fileSaveAll, *fileClose, *fileExamples, *fileSettings, *filePrint, *fileQuit,
+  QAction *fileNew, *fileNewNoDD, *textNew, *fileNewDpl, *fileOpen, *fileSave, *fileSaveAs,
+          *fileSaveAll, *fileClose, *fileCloseOthers, *fileCloseAllLeft, *fileCloseAllRight,
+          *fileCloseAll, *fileExamples, *fileSettings, *filePrint, *fileQuit,
           *projNew, *projOpen, *projDel, *projClose, *applSettings, *refreshSchPath,
           *editCut, *editCopy, *magAll, *magOne, *magMinus, *filePrintFit,
           *symEdit, *intoH, *popH, *simulate, *dpl_sch, *undo, *redo, *dcbias;
@@ -290,10 +376,10 @@ public:
   QAction *insWire, *insLabel, *insGround, *insPort, *insEquation, *magPlus,
           *editRotate, *editMirror, *editMirrorY, *editPaste, *select,
           *editActivate, *wire, *editDelete, *setMarker, *onGrid, *moveText,
-          *helpIndex, *helpGetStart, *callEditor, *callFilter, *callLine, *callActiveFilter,
+          *helpOnline, *callEditor, *callFilter, *callLine, *callActiveFilter,
           *showMsg, *showNet, *alignTop, *alignBottom, *alignLeft, *alignRight,
           *distrHor, *distrVert, *selectAll, *callLib, *callMatch, *changeProps,
-          *addToProj, *editFind, *insEntity, *selectMarker,
+          *addToProj, *editFind, *insEntity, *selectMarker, *callPowerComb,
           *createLib, *importData, *graph2csv, *createPkg, *extractPkg,
           *callAtt, *callRes, *centerHor, *centerVert, *loadModule, *buildModule;
 
@@ -341,8 +427,8 @@ public slots:
   void slotCallMatch();
   void slotCallAtt();
   void slotCallRes();
-  void slotHelpIndex();       // shows a HTML docu: Help Index
-  void slotGettingStarted();  // shows a HTML docu: Getting started
+  void slotHelpOnline();
+  void slotCallPowerComb();
   void slotChangeProps();
   void slotAddToProject();
   void slotApplyCompText();
@@ -368,10 +454,38 @@ private slots:
 
 private:
   void showHTML(const QString&);
-  bool performToggleAction(bool, QAction*, pToggleFunc, pMouseFunc, pMouseFunc2);
+  bool performToggleAction(bool, QAction*, pToggleFunc, pMouseFunc, pMouseFunc);
   void launchTool(const QString&, const QString&, const QString& = ""); // tool, description and args
   friend class SaveDialog;
   QString lastExportFilename;
+};
+
+/**
+ * @brief a QTabWidget with context menu for tabs
+ *
+ */
+class ContextMenuTabWidget : public QTabWidget
+{
+  Q_OBJECT
+public:
+  ContextMenuTabWidget(QucsApp *parent = 0);
+  Schematic *createEmptySchematic(const QString &name);
+  TextDoc *createEmptyTextDoc(const QString &name);
+  void setSaveIcon(bool state=true, int index=-1);
+public slots:
+  void showContextMenu(const QPoint& point);
+private:
+  int contextTabIndex; // index of tab where context menu was opened
+  QString docName; // name of the document where context menu was opened
+  QucsApp *App; // the main application - parent widget
+private slots:
+  void slotCxMenuClose();
+  void slotCxMenuCloseOthers();
+  void slotCxMenuCloseAll();
+  void slotCxMenuCloseRight();
+  void slotCxMenuCloseLeft();
+  void slotCxMenuCopyPath();
+  void slotCxMenuOpenFolder();
 };
 
 #endif /* QUCS_H */

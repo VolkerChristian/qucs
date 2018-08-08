@@ -17,7 +17,6 @@
 
 #include "verilogfile.h"
 #include "qucs.h"
-#include "main.h"
 #include "schematic.h"
 #include "misc.h"
 
@@ -28,7 +27,7 @@
 
 Verilog_File::Verilog_File()
 {
-  Type = isDigitalComponent;
+  ElemType = isDigitalComponent;
   Description = QObject::tr("Verilog file");
 
   Props.append(new Property("File", "sub.v", false,

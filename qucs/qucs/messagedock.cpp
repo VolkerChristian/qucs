@@ -17,11 +17,12 @@
 
 #include "messagedock.h"
 
-#include "main.h"
+#include "qucs.h"
 #include "qucsdoc.h"
 #include "textdoc.h"
 
 #include <QDockWidget>
+#include <QTextBlock>
 #include <QDebug>
 
 /*!

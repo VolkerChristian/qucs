@@ -103,11 +103,17 @@ ProjectView::refresh()
   m_model->item(category, 0)->appendRow(data);
 
   for(it = files.begin(); it != files.end(); ++it) {
-    fileName = (*it).toAscii();
+    fileName = (*it).toLatin1();
     extName = QFileInfo(workPath.filePath(fileName)).suffix();
 
     columnData.clear();
-    columnData.append(new QStandardItem(fileName));
+    QStandardItem * d = new QStandardItem(fileName);
+    if (QucsSettings.ShowDescriptionProjectTree)
+    {
+       QString description = ReadDescription(workPath.absoluteFilePath(fileName));
+       d->setToolTip(description);
+    }
+    columnData.append(d);
 
     if(extName == "dat") {
       APPEND_CHILD(0, columnData);
@@ -156,4 +162,29 @@ ProjectView::exportSchematic()
     }
   }
   return list;
+}
+
+// This function reads the text inside the <description></description> tags from the given file location
+QString ProjectView::ReadDescription(QString file)
+{
+    QFile QucsDocument(file);
+    if (!QucsDocument.open(QIODevice::ReadOnly)) return "";
+    QTextStream in (&QucsDocument);
+    QString line, description;
+    int index, index2;
+    do {
+        line = in.readLine();
+        index = line.indexOf("FrameText0=");
+        if (index != -1) {
+            index2 = line.indexOf(">", index);
+            index+=11;//Skip FrameText0=
+            description = line.mid(index, index2-index);
+            break;
+        }
+    } while (!line.isNull());
+
+    description.replace("\\n", "<br>");
+    QucsDocument.close();
+    if (description == "Title") description = "";//Prevent schematics without description from showing "Title" in the tooltip
+    return description;
 }

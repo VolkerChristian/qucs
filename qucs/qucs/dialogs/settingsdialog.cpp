@@ -18,10 +18,10 @@
 #include "settingsdialog.h"
 
 #include "node.h"
-#include "main.h"
 #include "qucs.h"
 #include "mnemo.h"
 #include "schematic.h"
+#include "schematicscene.h"
 
 #include <QGridLayout>
 #include <QVBoxLayout>
@@ -117,15 +117,15 @@ SettingsDialog::SettingsDialog(Schematic *Doc_)
     QWidget *Tab3 = new QWidget(t);
     QGridLayout *gp3 = new QGridLayout(Tab3);
     Combo_Frame = new QComboBox(Tab3);
-    Combo_Frame->insertItem(1, tr("no Frame"));
-    Combo_Frame->insertItem(2, tr("DIN A5 landscape"));
-    Combo_Frame->insertItem(3, tr("DIN A5 portrait"));
-    Combo_Frame->insertItem(4, tr("DIN A4 landscape"));
-    Combo_Frame->insertItem(5, tr("DIN A4 portrait"));
-    Combo_Frame->insertItem(6, tr("DIN A3 landscape"));
-    Combo_Frame->insertItem(7, tr("DIN A3 portrait"));
-    Combo_Frame->insertItem(8, tr("Letter landscape"));
-    Combo_Frame->insertItem(9, tr("Letter portrait"));
+    Combo_Frame->addItem(tr("no Frame"));
+    Combo_Frame->addItem(tr("DIN A5 landscape"));
+    Combo_Frame->addItem(tr("DIN A5 portrait"));
+    Combo_Frame->addItem(tr("DIN A4 landscape"));
+    Combo_Frame->addItem(tr("DIN A4 portrait"));
+    Combo_Frame->addItem(tr("DIN A3 landscape"));
+    Combo_Frame->addItem(tr("DIN A3 portrait"));
+    Combo_Frame->addItem(tr("Letter landscape"));
+    Combo_Frame->addItem(tr("Letter portrait"));
     gp3->addWidget(Combo_Frame,0,0,1,2);
 
     Input_Frame0 = new QTextEdit(Tab3);
@@ -172,16 +172,16 @@ SettingsDialog::SettingsDialog(Schematic *Doc_)
     Check_GridOn->setChecked(Doc->GridOn);
     Input_GridX->setText(QString::number(Doc->GridX));
     Input_GridY->setText(QString::number(Doc->GridY));
-    Combo_Frame->setCurrentIndex(Doc->showFrame);
+    Combo_Frame->setCurrentIndex(Doc->schematicFrame->PageType);
 
     QString Text_;
-    decode_String(Text_ = Doc->Frame_Text0);
+    decode_String(Text_ = Doc->schematicFrame->Title);
     Input_Frame0->setText(Text_);
-    decode_String(Text_ = Doc->Frame_Text1);
+    decode_String(Text_ = Doc->schematicFrame->Author);
     Input_Frame1->setText(Text_);
-    decode_String(Text_ = Doc->Frame_Text2);
+    decode_String(Text_ = Doc->schematicFrame->Date);
     Input_Frame2->setText(Text_);
-    decode_String(Text_ = Doc->Frame_Text3);
+    decode_String(Text_ = Doc->schematicFrame->Revision);
     Input_Frame3->setText(Text_);
 
     resize(250, 200);
@@ -276,38 +276,38 @@ void SettingsDialog::slotApply()
         changed = true;
     }
 
-    if(Doc->showFrame != Combo_Frame->currentIndex())
+    if(Doc->schematicFrame->PageType != Combo_Frame->currentIndex())
     {
-        Doc->showFrame = Combo_Frame->currentIndex();
+        Doc->schematicFrame->PageType = Combo_Frame->currentIndex();
         changed = true;
     }
 
     QString t;
     encode_String(Input_Frame0->toPlainText(), t);
-    if(Doc->Frame_Text0 != t)
+    if(Doc->schematicFrame->Title != t)
     {
-        Doc->Frame_Text0 = t;
+        Doc->schematicFrame->Title = t;
         changed = true;
     }
 
     encode_String(Input_Frame1->text(), t);
-    if(Doc->Frame_Text1 != t)
+    if(Doc->schematicFrame->Author != t)
     {
-        Doc->Frame_Text1 = t;
+        Doc->schematicFrame->Author = t;
         changed = true;
     }
 
     encode_String(Input_Frame2->text(), t);
-    if(Doc->Frame_Text2 != t)
+    if(Doc->schematicFrame->Date != t)
     {
-        Doc->Frame_Text2 = t;
+        Doc->schematicFrame->Date = t;
         changed = true;
     }
 
     encode_String(Input_Frame3->text(), t);
-    if(Doc->Frame_Text3 != t)
+    if(Doc->schematicFrame->Revision != t)
     {
-        Doc->Frame_Text3 = t;
+        Doc->schematicFrame->Revision = t;
         changed = true;
     }
 
@@ -343,7 +343,11 @@ AuxFilesDialog::AuxFilesDialog(QWidget *parent, const QString &filter) :QDialog(
 
   //tree->header()->setStretchLastSection(false);
   //tree->resizeColumnToContents(0);
+#if QT_VERSION < 0x050000
   tree->header()->setResizeMode(QHeaderView::ResizeToContents);
+#else
+  tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
+#endif
   //tree->header()->setResizeMode(0, QHeaderView::Stretch); 
   connect(tree, SIGNAL(doubleClicked(const QModelIndex &)), SLOT(slotDoubleClick(const QModelIndex &)));
 

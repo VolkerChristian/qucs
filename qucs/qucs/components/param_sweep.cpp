@@ -15,7 +15,8 @@
  *                                                                         *
  ***************************************************************************/
 #include "param_sweep.h"
-#include "main.h"
+#include "qucs.h"
+#include <assert.h>
 
 
 Param_Sweep::Param_Sweep()
@@ -23,7 +24,7 @@ Param_Sweep::Param_Sweep()
   Description = QObject::tr("Parameter sweep");
 
   QString  s = Description;
-  int a = s.findRev(" ");
+  int a = s.lastIndexOf(" ");
   if (a != -1) s[a] = '\n';    // break line
 
   Texts.append(new Text(0, 0, s.left(a), Qt::darkBlue, QucsSettings.largeFontSize));
@@ -84,9 +85,10 @@ void Param_Sweep::recreate(Schematic*)
     pp->Name = "Symbol";
     pp->display = false;
     Props.next()->Name = "Values";
-  }
-  else {
-    Props.next()->Name = "Start";
+  }else{
+    auto P=Props.next();
+	 assert(P);
+    P->Name = "Start";
     Props.next()->Name = "Stop";
     Props.next()->Name = "Points";
   }

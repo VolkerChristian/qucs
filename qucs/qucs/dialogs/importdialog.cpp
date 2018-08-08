@@ -26,7 +26,6 @@
 #include <QDebug>
 
 #include "importdialog.h"
-#include "main.h"
 #include "qucs.h"
 
 
@@ -99,7 +98,9 @@ ImportDialog::ImportDialog(QWidget *parent)
 
 ImportDialog::~ImportDialog()
 {
-  if(Process.Running)  Process.kill();
+  if(Process.Running!=0){
+	  Process.kill();
+  }
   delete all;
 }
 

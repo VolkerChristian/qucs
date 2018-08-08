@@ -17,7 +17,7 @@
 #include "ellipse.h"
 #include "filldialog.h"
 #include "schematic.h"
-#include "viewpainter.h"
+#include "misc.h"
 
 #include <QPainter>
 #include <QPushButton>
@@ -28,7 +28,7 @@
 Ellipse::Ellipse(bool _filled)
 {
   Name = "Ellipse ";
-  isSelected = false;
+  ElemSelected = false;
   Pen = QPen(QColor());
   Brush = QBrush(Qt::lightGray);
   filled = _filled;
@@ -37,38 +37,54 @@ Ellipse::Ellipse(bool _filled)
   y1 = y2 = 0;
 }
 
-Ellipse::~Ellipse()
+QRectF Ellipse::boundingRect() const
 {
+  return QRectF(cx+x1, cy+y1, x2-x1, y2-y1);
 }
 
-// --------------------------------------------------------------------------
-void Ellipse::paint(ViewPainter *p)
+void Ellipse::paint(QPainter *painter, const QStyleOptionGraphicsItem *item, QWidget *widget)
 {
-  if(isSelected) {
-    p->Painter->setPen(QPen(Qt::darkGray,Pen.width()+5));
-    if(filled)  p->Painter->setBrush(Brush);
-    p->drawEllipse(cx, cy, x2, y2);
-    p->Painter->setPen(QPen(Qt::white, Pen.width(), Pen.style()));
-    p->Painter->setBrush(Qt::NoBrush);
-    p->drawEllipse(cx, cy, x2, y2);
-
-    p->Painter->setPen(QPen(Qt::darkRed,2));
-    p->drawResizeRect(cx, cy+y2);  // markers for changing the size
-    p->drawResizeRect(cx, cy);
-    p->drawResizeRect(cx+x2, cy+y2);
-    p->drawResizeRect(cx+x2, cy);
+  // paint mouse decoration
+  if(drawScheme) {
+    painter->drawEllipse(ex+13, ey, 18, 12);
+    if(filled) {
+      painter->drawLine(ex+14, ey+7, ex+20, ey+1);
+      painter->drawLine(ex+25, ey+2, ex+18, ey+9);
+      painter->drawLine(ex+29, ey+4, ex+23, ey+10);
+    }
+    // preview ellipse after first mouse press
+    if(State == 1) {
+      // _Ellipse hang/crash application, using _Arc solved, see bug 141 (closed)
+      painter->drawArc(x1, y1, x2-x1, y2-y1, 0, 16*360);
+      return;
+    }
     return;
   }
-  p->Painter->setPen(Pen);
-  if(filled)  p->Painter->setBrush(Brush);
-  p->drawEllipse(cx, cy, x2, y2);
-  p->Painter->setBrush(Qt::NoBrush); // no filling for the next paintings
-}
 
-// --------------------------------------------------------------------------
-void Ellipse::paintScheme(Schematic *p)
-{
-  p->PostPaintEvent(_Ellipse, cx, cy, x2, y2);
+
+  if(isSelected()) {
+    painter->setPen(QPen(Qt::darkGray,Pen.width()+5));
+    if(filled)
+      painter->setBrush(Brush);
+    painter->drawEllipse(cx, cy, x2, y2);
+    painter->setPen(QPen(Qt::white, Pen.width(), Pen.style()));
+    painter->setBrush(Qt::NoBrush);
+    painter->drawEllipse(cx, cy, x2, y2);
+
+    painter->setPen(QPen(Qt::darkRed,2));
+    painter->drawRect(cx-5,    cy+y2-5, 10, 10);  // markers for changing the size
+    painter->drawRect(cx-5,    cy-5,    10, 10);
+    painter->drawRect(cx+x2-5, cy+y2-5, 10, 10);
+    painter->drawRect(cx+x2-5, cy-5,    10, 10);
+
+    return;
+  }
+
+  painter->setPen(Pen);
+  if(filled)
+    painter->setBrush(Brush);
+  painter->drawEllipse(cx, cy, x2, y2);
+  painter->setBrush(Qt::NoBrush); // no filling for the next paintings
 }
 
 // --------------------------------------------------------------------------
@@ -89,7 +105,9 @@ void Ellipse::setCenter(int x, int y, bool relative)
 // --------------------------------------------------------------------------
 Painting* Ellipse::newOne()
 {
-  return new Ellipse();
+  Ellipse* newOne = new Ellipse();
+  newOne->filled = filled;
+  return newOne;
 }
 
 // --------------------------------------------------------------------------
@@ -236,7 +254,6 @@ bool Ellipse::resizeTouched(float fX, float fY, float len)
 // Mouse move action during resize.
 void Ellipse::MouseResizeMoving(int x, int y, Schematic *p)
 {
-  paintScheme(p);  // erase old painting
   switch(State) {
     case 0: x2 = x-cx; y2 = y-cy; // lower right corner
 	    break;
@@ -249,8 +266,6 @@ void Ellipse::MouseResizeMoving(int x, int y, Schematic *p)
   }
   if(x2 < 0) { State ^= 1; x2 *= -1; cx -= x2; }
   if(y2 < 0) { State ^= 2; y2 *= -1; cy -= y2; }
-
-  paintScheme(p);  // paint new painting
 }
 
 // --------------------------------------------------------------------------
@@ -260,33 +275,18 @@ void Ellipse::MouseMoving(
 	Schematic *paintScale, int, int, int gx, int gy,
 	Schematic *p, int x, int y, bool drawn)
 {
-  if(State > 0) {
-    if(State > 1)
-      // _Ellipse hang/crash application, using _Arc solved, see bug 141 (closed)
-      paintScale->PostPaintEvent(_Arc, x1, y1, x2-x1, y2-y1, 0, 16*360); // erase old painting
-    State++;
+  if(State > 0) { // after first press
     x2 = gx;
     y2 = gy;
-    paintScale->PostPaintEvent(_Arc, x1, y1, x2-x1, y2-y1, 0, 16*360);
   }
   else { x2 = gx; y2 = gy; }
 
-  if(drawn) {
-    p->PostPaintEvent(_Ellipse, cx+13, cy, 18, 12,0,0,true);  // erase old cursor symbol
-    if(filled) {
-      p->PostPaintEvent(_Line, cx+14, cy+7, cx+20, cy+1,0,0,true);
-      p->PostPaintEvent(_Line, cx+25, cy+2, cx+18, cy+9,0,0,true);
-      p->PostPaintEvent(_Line, cx+29, cy+4, cx+23, cy+10,0,0,true);
-    }
-  }
   cx = x;
   cy = y;
-  p->PostPaintEvent(_Ellipse, cx+13, cy, 18, 12,0,0,true);  // paint new cursor symbol
-  if(filled) {
-    p->PostPaintEvent(_Line, cx+14, cy+7, cx+20, cy+1,0,0,true);
-    p->PostPaintEvent(_Line, cx+25, cy+2, cx+18, cy+9,0,0,true);
-    p->PostPaintEvent(_Line, cx+29, cy+4, cx+23, cy+10,0,0,true);
-  }
+
+  // track mouse move event to show scheme
+  ex = x;
+  ey = y;
 }
 
 // --------------------------------------------------------------------------
@@ -297,7 +297,7 @@ bool Ellipse::MousePressing()
     x1 = x2;
     y1 = y2;    // first corner is determined
   }
-  else {
+  else if(State == 2){
     if(x1 < x2) { cx = x1; x2 = x2-x1; } // cx/cy to upper left corner
     else { cx = x2; x2 = x1-x2; }
     if(y1 < y2) { cy = y1; y2 = y2-y1; }
@@ -371,11 +371,11 @@ bool Ellipse::Dialog()
   bool changed = false;
 
   FillDialog *d = new FillDialog(QObject::tr("Edit Ellipse Properties"));
-  d->ColorButt->setPaletteBackgroundColor(Pen.color());
+  misc::setPickerColor(d->ColorButt, Pen.color());
   d->LineWidth->setText(QString::number(Pen.width()));
-  d->StyleBox->setCurrentItem(Pen.style()-1);
-  d->FillColorButt->setPaletteBackgroundColor(Brush.color());
-  d->FillStyleBox->setCurrentItem(Brush.style());
+  d->StyleBox->setCurrentIndex(Pen.style()-1);
+  misc::setPickerColor(d->FillColorButt, Brush.color());
+  d->FillStyleBox->setCurrentIndex(Brush.style());
   d->CheckFilled->setChecked(filled);
   d->slotCheckFilled(filled);
 
@@ -384,28 +384,31 @@ bool Ellipse::Dialog()
     return false;
   }
 
-  if(Pen.color() != d->ColorButt->paletteBackgroundColor()) {
-    Pen.setColor(d->ColorButt->paletteBackgroundColor());
+  /// \todo deduplicate
+  QColor penColor = misc::getWidgetBackgroundColor(d->ColorButt);
+  if(Pen.color() != penColor) {
+    Pen.setColor(penColor);
     changed = true;
   }
   if(Pen.width()  != d->LineWidth->text().toInt()) {
     Pen.setWidth(d->LineWidth->text().toInt());
     changed = true;
   }
-  if(Pen.style()  != (Qt::PenStyle)(d->StyleBox->currentItem()+1)) {
-    Pen.setStyle((Qt::PenStyle)(d->StyleBox->currentItem()+1));
+  if(Pen.style()  != (Qt::PenStyle)(d->StyleBox->currentIndex()+1)) {
+    Pen.setStyle((Qt::PenStyle)(d->StyleBox->currentIndex()+1));
     changed = true;
   }
   if(filled != d->CheckFilled->isChecked()) {
     filled = d->CheckFilled->isChecked();
     changed = true;
   }
-  if(Brush.color() != d->FillColorButt->paletteBackgroundColor()) {
-    Brush.setColor(d->FillColorButt->paletteBackgroundColor());
+  QColor brushColor = misc::getWidgetBackgroundColor(d->FillColorButt);
+  if(Brush.color() != brushColor) {
+    Brush.setColor(brushColor);
     changed = true;
   }
-  if(Brush.style()  != d->FillStyleBox->currentItem()) {
-    Brush.setStyle((Qt::BrushStyle)d->FillStyleBox->currentItem());
+  if(Brush.style()  != d->FillStyleBox->currentIndex()) {
+    Brush.setStyle((Qt::BrushStyle)d->FillStyleBox->currentIndex());
     changed = true;
   }
 

@@ -18,15 +18,13 @@
 #ifndef COMPONENT_H
 #define COMPONENT_H
 
-#include <Q3PtrList>
-
 #include "element.h"
+#include "qt_compat.h"
 
 class Schematic;
-class ViewPainter;
 class QString;
 class QPen;
-
+class ComponentDialog;
 
 class Component : public Element {
 public:
@@ -38,9 +36,15 @@ public:
   QString getNetlist();
   QString get_VHDL_Code(int);
   QString get_Verilog_Code(int);
-  void    paint(ViewPainter*);
-  void    paintScheme(Schematic*);
-  void    print(ViewPainter*, float);
+
+  QRectF  boundingRect() const;
+  void    paint(QPainter* painter, const QStyleOptionGraphicsItem* item, QWidget* widget);
+  void    paintScheme(QPainter* painter);
+  void    print(QPainter*, float);
+
+  void hoverEnterEvent(QGraphicsSceneHoverEvent *event);
+  void hoverLeaveEvent(QGraphicsSceneHoverEvent *event);
+
   void    setCenter(int, int, bool relative=false);
   void    getCenter(int&, int&);
   int     textSize(int&, int&);
@@ -51,8 +55,11 @@ public:
   void    rotate();
   void    mirrorX();  // mirror about X axis
   void    mirrorY();  // mirror about Y axis
-  QString save();
   bool    load(const QString&);
+
+  /// \todo remove temporary stuff
+  // default pen used to draw the bounding box
+  QPen boundingBoxColor = QPen(Qt::magenta,1);
 
   // to hold track of the component appearance for saving and copying
   bool mirroredX;   // is it mirrored about X axis or not
@@ -62,6 +69,8 @@ public:
   // set the pointer scematic associated with the component
   virtual void setSchematic (Schematic* p) { containingSchematic = p; }
   virtual Schematic* getSchematic () {return containingSchematic; }
+  // do somehting with buttons. can sb think of a more descriptive name?
+  virtual void dialgButtStuff(ComponentDialog&)const;
 
   QList<Line *>     Lines;
   QList<struct Arc *>      Arcs;
@@ -77,9 +86,34 @@ public:
   int  isActive; // should it be used in simulation or not ?
   int  tx, ty;   // upper left corner of text (position)
   bool showName;
-  QString  Model, Name;
-  QString  Description;
 
+public:
+  QString const& obsolete_model_hack() const{
+	  // BUG. do not use
+	  return Model;
+  }
+  QString const& name() const{
+	  // yikes. this should not be necessary
+	  return Name;
+  }
+  void obsolete_name_override_hack(QString x){
+	  Name = x;
+  }
+  void gnd_obsolete_model_override_hack(QString x){
+	  //assert (this is a gnd component); // fix later
+	  Model = x;
+  }
+  QString const& description() const{
+	  return Description;
+  }
+
+private:
+protected: // BUG
+  QString Model;
+protected: // BUG
+  QString Name;
+protected: // BUG
+  QString  Description;
 protected:
   virtual QString netlist();
   virtual QString vhdlCode(int);

@@ -14,14 +14,15 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+#include "componentdialog.h"
 #include "equation.h"
-#include "main.h"
+#include "qucs.h"
 
 #include <QFontMetrics>
 
 Equation::Equation()
 {
-  Type = isComponent; // Analogue and digital component.
+  ElemType = isComponent; // Analogue and digital component.
   Description = QObject::tr("equation");
 
   QFont f = QucsSettings.font;
@@ -42,8 +43,8 @@ Equation::Equation()
 
   tx = x1+4;
   ty = y2+4;
-  Model = "Eqn";
-  Name  = "Eqn";
+  Model = "Eqn"; // BUG: don't use
+  Name  = "Eqn"; // BUG: don't use
 
   Props.append(new Property("y", "1", true));
   Props.append(new Property("Export", "yes", false,
@@ -89,3 +90,10 @@ Element* Equation::info(QString& Name, char* &BitmapFile, bool getNewOne)
   if(getNewOne)  return new Equation();
   return 0;
 }
+
+void Equation::dialgButtStuff(ComponentDialog& d)const
+{
+  d.enableButtons();
+}
+
+// vim:ts=8:sw=2:noet

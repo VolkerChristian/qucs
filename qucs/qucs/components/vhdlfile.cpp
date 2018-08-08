@@ -16,7 +16,6 @@
  ***************************************************************************/
 #include "vhdlfile.h"
 #include "qucs.h"
-#include "main.h"
 #include "schematic.h"
 #include "misc.h"
 
@@ -27,7 +26,7 @@
 
 VHDL_File::VHDL_File()
 {
-  Type = isDigitalComponent;
+  ElemType = isDigitalComponent;
   Description = QObject::tr("VHDL file");
 
   Props.append(new Property("File", "sub.vhdl", false,

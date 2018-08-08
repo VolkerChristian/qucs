@@ -31,8 +31,8 @@
 #include <QGroupBox>
 #include <QListWidgetItem>
 
-SaveDialog::SaveDialog( QWidget* parent, const char* name, bool modal, Qt::WFlags fl )
-   : QDialog( parent, name, modal, fl ),unsavedDocs()
+SaveDialog::SaveDialog( QWidget* parent, const char* name, bool modal, Qt::WindowFlags fl )
+   : QDialog( parent, fl ),unsavedDocs()
 {
    if ( !name )
       setWindowTitle( tr( "Save the modified files" ) );
@@ -51,8 +51,8 @@ void SaveDialog::setApp(QucsApp *a)
 
 void SaveDialog::initDialog()
 {
-   setSizeGripEnabled( FALSE );
-   SaveDialogLayout = new QVBoxLayout( this, 11, 6, "SaveDialogLayout"); 
+   setSizeGripEnabled( false );
+   SaveDialogLayout = new QVBoxLayout(this);
 
    label = new QLabel( tr( "Select files to be saved" ) );
    SaveDialogLayout->addWidget( label );
@@ -65,7 +65,7 @@ void SaveDialog::initDialog()
    checkBoxLayout->addWidget(fileView);
    SaveDialogLayout->addWidget(group);
    
-   buttonsLayout = new QHBoxLayout( 0, 0, 6, "buttonsLayout"); 
+   buttonsLayout = new QHBoxLayout();
 
    abortClosingButton = new QPushButton( tr( "Abort Closing" ) );
    buttonsLayout->addWidget( abortClosingButton );
@@ -79,7 +79,11 @@ void SaveDialog::initDialog()
    saveSelectedButton->setDefault(true);
    buttonsLayout->addWidget( saveSelectedButton );
    SaveDialogLayout->addLayout( buttonsLayout );
+#if QT_VERSION < 0x050000
    languageChange();
+#else
+   // TODO for Qt5 ??
+#endif
    resize( QSize(500, 300).expandedTo(minimumSizeHint()) );
    //clearWState( Qt::WA_WState_Polished );
    setAttribute(Qt::WA_WState_Polished, false);
@@ -117,7 +121,7 @@ void SaveDialog::saveSelectedClicked()
          if(app->saveFile(doc) == false)
             unsavable.append(doc);
          else
-            unsavedDocs.remove(it);
+            unsavedDocs.erase(it);
       }
    }
    if(unsavable.isEmpty())

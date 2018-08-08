@@ -30,17 +30,19 @@
 #include "wire.h"
 #include "node.h"
 #include "qucsdoc.h"
-#include "viewpainter.h"
 #include "diagrams/diagram.h"
 #include "paintings/painting.h"
 #include "components/component.h"
+#include "frame.h"
+#include "mousecursor.h"
 
-#include <Q3ScrollView>
-#include <Q3PtrList>
+#include <QGraphicsView>
+#include "qt_compat.h"
 #include <QVector>
 #include <QStringList>
 #include <QFileInfo>
 
+class SchematicScene;
 class QTextStream;
 class QTextEdit;
 class QPlainTextEdit;
@@ -61,8 +63,6 @@ struct DigSignal {
   QString Type; // type of signal
 };
 typedef QMap<QString, DigSignal> DigMap;
-typedef enum {_NotRop, _Rect, _Line, _Ellipse, _Arc, _DotLine, _Translate, _Scale}PE;
-typedef struct {PE pe; int x1; int y1;int x2;int y2;int a; int b; bool PaintOnViewport;}PostedPaintEvent;
 
 // subcircuit, vhdl, etc. file structure
 struct SubFile {
@@ -75,7 +75,23 @@ struct SubFile {
 };
 typedef QMap<QString, SubFile> SubMap;
 
-class Schematic : public Q3ScrollView, public QucsDoc {
+// TODO: refactor here
+class WireList : public Q3PtrList<Wire> {
+};
+// TODO: refactor here
+class NodeList : public Q3PtrList<Node> {
+};
+// TODO: refactor here
+class DiagramList : public Q3PtrList<Diagram> {
+};
+// TODO: refactor here
+class ComponentList : public Q3PtrList<Component> {
+};
+// TODO: refactor here
+class PaintingList : public Q3PtrList<Painting> {
+};
+
+class Schematic : public QGraphicsView, public QucsDoc {
   Q_OBJECT
 public:
   Schematic(QucsApp*, const QString&);
@@ -83,15 +99,12 @@ public:
 
   void setName(const QString&);
   void setChanged(bool, bool fillStack=false, char Op='*');
-  void paintGrid(ViewPainter*, int, int, int, int);
   void print(QPrinter*, QPainter*, bool, bool);
 
-  void paintSchToViewpainter(ViewPainter* p, bool printAll, bool toImage, int screenDpiX=96, int printerDpiX=300);
-
-  void PostPaintEvent(PE pe, int x1=0, int y1=0, int x2=0, int y2=0, int a=0, int b=0,bool PaintOnViewport=false);
+  void paintInit(QPainter*, float, int, int, int, int, float FontScale_=0.0, float PrintScale=1.0);
+  void paintSchToViewpainter(QPainter* p, bool printAll, bool toImage, int screenDpiX=96, int printerDpiX=300);
 
   float textCorr();
-  bool sizeOfFrame(int&, int&);
   void  sizeOfAll(int&, int&, int&, int&);
   bool  rotateElements();
   bool  mirrorXComponents();
@@ -99,11 +112,12 @@ public:
   void  setOnGrid(int&, int&);
   bool  elementsOnGrid();
 
-  float zoom(float);
-  float zoomBy(float);
-  void  showAll();
-  void  showNoZoom();
+  void  zoomFit();
+  void  zoomReset();
+  void  zoomOut();
+  void  zoomIn();
   void  enlargeView(int, int, int, int);
+
   void  switchPaintMode();
   int   adjustPortNumbers();
   void  reloadGraphs();
@@ -125,26 +139,31 @@ public:
   bool scrollLeft(int);
   bool scrollRight(int);
 
+  // schematic Scene for this View
+  SchematicScene *scene;
+
+  // schematic frame item
+  Frame *schematicFrame;
+
   // The pointers points to the current lists, either to the schematic
   // elements "Doc..." or to the symbol elements "SymbolPaints".
-  Q3PtrList<Wire>      *Wires, DocWires;
-  Q3PtrList<Node>      *Nodes, DocNodes;
-  Q3PtrList<Diagram>   *Diagrams, DocDiags;
-  Q3PtrList<Painting>  *Paintings, DocPaints;
-  Q3PtrList<Component> *Components, DocComps;
+// private: //TODO. one at a time.
+  WireList      *Wires, DocWires;
+  NodeList      *Nodes, DocNodes;
+  DiagramList   *Diagrams, DocDiags;
+  PaintingList  *Paintings, DocPaints;
+  ComponentList *Components, DocComps;
 
-  Q3PtrList<Painting>  SymbolPaints;  // symbol definition for subcircuit
+  PaintingList  SymbolPaints;  // symbol definition for subcircuit
 
-  QList<PostedPaintEvent>   PostedPaintEvents;
   bool symbolMode;  // true if in symbol painting mode
 
+  // mouse decoration to reflect currently selected mode
+  MouseCursor *mouseCursor;
 
   int GridX, GridY;
   int ViewX1, ViewY1, ViewX2, ViewY2;  // size of the document area
   int UsedX1, UsedY1, UsedX2, UsedY2;  // document area used by elements
-
-  int showFrame;
-  QString Frame_Text0, Frame_Text1, Frame_Text2, Frame_Text3;
 
   // Two of those data sets are needed for Schematic and for symbol.
   // Which one is in "tmp..." depends on "symbolMode".
@@ -169,14 +188,11 @@ signals:
   void signalFileChanged(bool);
 
 protected:
-  void paintFrame(ViewPainter*);
-
   // overloaded function to get actions of user
-  void drawContents(QPainter*, int, int, int, int);
-  void contentsMouseMoveEvent(QMouseEvent*);
-  void contentsMousePressEvent(QMouseEvent*);
-  void contentsMouseDoubleClickEvent(QMouseEvent*);
-  void contentsMouseReleaseEvent(QMouseEvent*);
+  void mouseMoveEvent(QMouseEvent*);
+  void mousePressEvent(QMouseEvent*);
+  void mouseReleaseEvent(QMouseEvent*);
+  void mouseDoubleClickEvent(QMouseEvent*);
   void contentsWheelEvent(QWheelEvent*);
   void contentsDropEvent(QDropEvent*);
   void contentsDragEnterEvent(QDragEnterEvent*);
@@ -222,7 +238,6 @@ public:
   void    markerLeftRight(bool, Q3PtrList<Element>*);
   void    markerUpDown(bool, Q3PtrList<Element>*);
 
-  Element* selectElement(float, float, bool, int *index=0);
   void     deselectElements(Element*);
   int      selectElements(int, int, int, int, bool);
   void     selectMarkers();
@@ -243,7 +258,6 @@ public:
   void       setCompPorts(Component*);
   Component* selectCompText(int, int, int&, int&);
   Component* searchSelSubcircuit();
-  Component* selectedComponent(int, int);
   void       deleteComp(Component*);
 
   void     oneLabel(Node*);
@@ -252,7 +266,6 @@ public:
   void     insertNodeLabel(WireLabel*);
   void     copyLabels(int&, int&, int&, int&, QList<Element *> *);
 
-  Painting* selectedPainting(float, float);
   void      copyPaintings(int&, int&, int&, int&, QList<Element *> *);
 
 
@@ -313,10 +326,16 @@ private:
   DigMap Signals; // collecting node names for VHDL signal declarations
   QStringList PortTypes;
 
+public: // for now. move to parser asap
+	Component* loadComponent(const QString& _s, Component* c) const;
+
 public:
   bool isAnalog;
   bool isVerilog;
   bool creatingLib;
+
+public: // serializer
+  void saveComponent(QTextStream& s, Component /* FIXME const */* c) const;
 };
 
 #endif

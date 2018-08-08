@@ -16,7 +16,8 @@
  ***************************************************************************/
 #include "ellipsearc.h"
 #include "filldialog.h"
-#include "main.h"
+#include "qucs.h"
+#include "misc.h"
 #include "schematic.h"
 
 #include <QPainter>
@@ -29,39 +30,47 @@
 EllipseArc::EllipseArc()
 {
   Name = "EArc ";
-  isSelected = false;
+  ElemSelected = false;
   Pen = QPen(QColor());
   cx = cy = x1 = x2 = y1 = y2 = Angle = ArcLen = 0;
 }
 
-EllipseArc::~EllipseArc()
+QRectF EllipseArc::boundingRect() const
 {
+  return QRectF(cx+x1, cy+y1, x2-x1, y2-y1);
 }
 
-// --------------------------------------------------------------------------
-void EllipseArc::paint(ViewPainter *p)
+void EllipseArc::paint(QPainter *painter, const QStyleOptionGraphicsItem *item, QWidget *widget)
 {
-  if(isSelected) {
-    p->Painter->setPen(QPen(Qt::darkGray,Pen.width()+5));
-    p->drawArc(cx, cy, x2, y2, Angle, ArcLen);
-    p->Painter->setPen(QPen(Qt::white, Pen.width(), Pen.style()));
-    p->drawArc(cx, cy, x2, y2, Angle, ArcLen);
 
-    p->Painter->setPen(QPen(Qt::darkRed,2));
-    p->drawResizeRect(cx, cy+y2);  // markers for changing the size
-    p->drawResizeRect(cx, cy);
-    p->drawResizeRect(cx+x2, cy+y2);
-    p->drawResizeRect(cx+x2, cy);
+  // paint mouse decoration
+  if(drawScheme) {
+    painter->drawArc(x1+13, y1, 18, 12, 16*45, 16*200);
+
+    if(State > 0) {
+      painter->drawArc(cx, cy, x2, y2, Angle, ArcLen);
+      return;
+    }
     return;
   }
-  p->Painter->setPen(Pen);
-  p->drawArc(cx, cy, x2, y2, Angle, ArcLen);
-}
 
-// --------------------------------------------------------------------------
-void EllipseArc::paintScheme(Schematic *p)
-{
-  p->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, ArcLen);
+  if(isSelected()) {
+    painter->setPen(QPen(Qt::darkGray,Pen.width()+5));
+    painter->drawArc(cx, cy, x2, y2, Angle, ArcLen);
+    painter->setPen(QPen(Qt::white, Pen.width(), Pen.style()));
+    painter->drawArc(cx, cy, x2, y2, Angle, ArcLen);
+
+    painter->setPen(QPen(Qt::darkRed,2));
+    painter->drawRect(cx-5,    cy+y2-5, 10, 10);  // markers for changing the size
+    painter->drawRect(cx-5,    cy-5,    10, 10);
+    painter->drawRect(cx+x2-5, cy+y2-5, 10, 10);
+    painter->drawRect(cx+x2-5, cy-5,    10, 10);
+
+    return;
+  }
+
+  painter->setPen(Pen);
+  painter->drawArc(cx, cy, x2, y2, Angle, ArcLen);
 }
 
 // --------------------------------------------------------------------------
@@ -204,7 +213,6 @@ bool EllipseArc::resizeTouched(float fX, float fY, float len)
 // Mouse move action during resize.
 void EllipseArc::MouseResizeMoving(int x, int y, Schematic *p)
 {
-  paintScheme(p);  // erase old painting
   switch(State) {
     case 0: x2 = x-cx; y2 = y-cy; // lower right corner
 	    break;
@@ -217,8 +225,6 @@ void EllipseArc::MouseResizeMoving(int x, int y, Schematic *p)
   }
   if(x2 < 0) { State ^= 1; x2 *= -1; cx -= x2; }
   if(y2 < 0) { State ^= 2; y2 *= -1; cy -= y2; }
-
-  paintScheme(p);  // paint new painting
 }
 
 // --------------------------------------------------------------------------
@@ -237,17 +243,14 @@ void EllipseArc::MouseMoving(
       State++;
       x2 = gx - cx;
       y2 = gy - cy;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, 0, 16*360);  // paint new painting
+      ArcLen = 16*360;
       break;
     case 2 :
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, 0, 16*360);  // erase old painting
       x2 = gx - cx;
       y2 = gy - cy;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, 0, 16*360);  // paint new painting
       break;
     case 3 :
       State++;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, 0, 16*360);  // erase old painting
       if(x2 < 0) { cx += x2;  x2 *= -1; }
       if(y2 < 0) { cy += y2;  y2 *= -1; }
 
@@ -255,45 +258,33 @@ void EllipseArc::MouseMoving(
 		* atan2(double(x2*(cy+(y2>>1) - fy)),
 			double(y2*(fx - cx-(x2>>1)))));
       if(Angle < 0) Angle += 16*360;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, 16*180); // new painting
+      ArcLen = 16*180;
       break;
     case 4 :
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, 16*180);// erase old painting
       Angle = int(16.0*180.0/pi
 		* atan2(double(x2*(cy+(y2>>1) - fy)),
 			double(y2*(fx - cx-(x2>>1)))));
       if(Angle < 0) Angle += 16*360;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, 16*180);// paint new painting
       break;
     case 5 :
       State++;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, 16*180);// erase old painting
       ArcLen = int(16.0*180.0/pi
 		* atan2(double(x2*(cy+(y2>>1) - fy)),
 			double(y2*(fx - cx-(x2>>1)))));
       ArcLen -= Angle;
       while(ArcLen < 0) ArcLen += 16*360;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, ArcLen);// paint new painting
       break;
     case 6 :
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, ArcLen);// erase old painting
       ArcLen = int(16.0*180.0/pi
 		* atan2(double(x2*(cy+(y2>>1) - fy)),
 			double(y2*(fx - cx-(x2>>1)))));
       ArcLen -= Angle;
       while(ArcLen <= 32) ArcLen += 16*360;
-      paintScale->PostPaintEvent(_Arc, cx, cy, x2, y2, Angle, ArcLen);// paint new painting
       break;
   }
 
-
-  // FIXME #warning p->setPen(Qt::SolidLine);
-  if(drawn)
-    p->PostPaintEvent(_Arc, x1+13, y1, 18, 12, 16*45, 16*200,true); // erase old cursor symbol
-
   x1 = x;
   y1 = y;
-  p->PostPaintEvent(_Arc, x1+13, y1, 18, 12, 16*45, 16*200,true);  // paint new cursor symbol
 }
 
 // --------------------------------------------------------------------------
@@ -385,25 +376,27 @@ bool EllipseArc::Dialog()
   bool changed = false;
 
   FillDialog *d = new FillDialog(QObject::tr("Edit Arc Properties"), false);
-  d->ColorButt->setPaletteBackgroundColor(Pen.color());
+  misc::setPickerColor(d->ColorButt, Pen.color());
   d->LineWidth->setText(QString::number(Pen.width()));
-  d->StyleBox->setCurrentItem(Pen.style()-1);
+  d->StyleBox->setCurrentIndex(Pen.style()-1);
 
   if(d->exec() == QDialog::Rejected) {
     delete d;
     return false;
   }
 
-  if(Pen.color() != d->ColorButt->paletteBackgroundColor()) {
-    Pen.setColor(d->ColorButt->paletteBackgroundColor());
+  /// \todo deduplicate
+  QColor penColor = misc::getWidgetBackgroundColor(d->ColorButt);
+  if(Pen.color() != penColor) {
+    Pen.setColor(penColor);
     changed = true;
   }
   if(Pen.width()  != d->LineWidth->text().toInt()) {
     Pen.setWidth(d->LineWidth->text().toInt());
     changed = true;
   }
-  if(Pen.style()  != (Qt::PenStyle)(d->StyleBox->currentItem()+1)) {
-    Pen.setStyle((Qt::PenStyle)(d->StyleBox->currentItem()+1));
+  if(Pen.style()  != (Qt::PenStyle)(d->StyleBox->currentIndex()+1)) {
+    Pen.setStyle((Qt::PenStyle)(d->StyleBox->currentIndex()+1));
     changed = true;
   }
 
